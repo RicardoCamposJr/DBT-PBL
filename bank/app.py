@@ -3,10 +3,8 @@ import requests
 import threading
 import time
 
-# TO DO:
-# Fazer rota de /receive;
-# Implementar a tradução de transactionPackage para as transferências na rota /token;
-# Implementar rota de transferencia em outro banco para utilizar na rota /token;
+# TO DO: 
+# Implementar a transferencias de outros bancos por esse; Ideia: colocar outra seção no transactionPackage para definir q será em outro banco, entao utilizar a rota de criação para criar em outro banco.
 
 app = Flask(__name__)
 
@@ -17,8 +15,11 @@ banks = {1: 'localhost:5001',
          5: 'localhost:5005'}
 
 # Formato:
-# transactionPackage = {1: ['otherBank' ou 'thisBank', transferCPF (string), receiverCPF (string), destinationBankId (int), amount (int)]}
-transactionPackage = {1: ['thisBank', '0001', '0002', 1, 10]}
+# transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int)]}
+
+# transactionPackage = {1: ['0001', '0001', 2, 1, 10]}
+
+transactionPackage = {}
 
 # Estrutura de dados para armazenar os dados dos usuários
 users = {}
@@ -51,68 +52,49 @@ def deposit():
 
 @app.route('/transfer', methods=['POST'])
 def transfer():
-    global token_holder
-    transferStatus = 'inconcluded'
+    data = request.get_json()
+    receiverCPF = data.get('receiverCPF')
+    amount = data.get('amount')
 
-    while transferStatus == 'inconcluded':
-        if token_holder:
-            data = request.get_json()
-            transferCPF = data.get('transferCPF')
-            receiverCPF = data.get('receiverCPF')
-            bankId = data.get('destinationBankId')
-            amount = data.get('amount')
+    if receiverCPF not in users.keys():
+        return jsonify({'message': 'O cliente não existe nesse banco!'}), 404
 
-            if transferCPF not in users:
-                return jsonify({'message': 'O cliente não existe nesse banco!'}), 404
-            if users[transferCPF]['balance'] < amount:
-                return jsonify({'message': 'Saldo insuficiente'}), 400
-            
-            statusCode = verifyClientExists(receiverCPF, bankId)
-            print(statusCode)
+    users[receiverCPF]['balance'] += amount
+    return jsonify({'message': 'Transferência realizada com sucesso!'}), 200
 
-            if statusCode == 200:
-                users[transferCPF]['balance'] -= amount
-                transferStatus = 'concluded'
-                return jsonify({'message': 'Transferência realizada com sucesso!'}), 200
-            else:
-                return jsonify({'message': 'Transferência não realizada!'}), 400
+@app.route('/transactions', methods=['POST'])
+def createTransactions():
+    global transactionPackage
+    
+    data = request.get_json()
+    receiverCPF = data.get('receiverCPF')
+    transferCPF = data.get('transferCPF')
+    sourceBankId = int(data.get('sourceBankId'))
+    destinationBankId = int(data.get('destinationBankId'))
+    amount = float(data.get('amount'))
 
+    if transactionPackage:
+        nextKey = max(transactionPackage.keys()) + 1
+        transactionPackage[nextKey] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount]
+    else:
+        transactionPackage[1] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount]
+
+    
+    return jsonify(transactionPackage), 200
 
 @app.route('/users', methods=['GET'])
 def get_users():
     return jsonify(users), 200
 
-@app.route('/register', methods=['POST'])
-def register():
-    global next_instance
-    data = request.get_json()
-    next_instance = data.get('next_instance')
-    return jsonify({'message': 'Registrado com sucesso'}), 200
-
-# Rota que recebe o token e realiza as transações:
+# Rota que recebe o token:
 @app.route('/token', methods=['POST'])
 def token():
     global token_holder
-    global passingToken
-    global transactionPackage
-
-    data = request.get_json()
+    global id
 
     token_holder = True
-
-    print("Token recebido")
-
-    # Tradução da estrutura transactionPackage para as requisições de fato:
-    for transaction in transactionPackage.values():
-        # Transferencia desse banco para outro:
-        if transaction[0] == 'thisBank':
-            requests.post(f'http://localhost:{5000+bankId}/transfer', json={"transferCPF": f"{transaction[1]}","receiverCPF": f"{transaction[2]}","destinationBankId": transaction[3],"amount": transaction[4]})
-        # Transferencia de outro banco para outro:
-        else:
-            requests.post(f'http://localhost:{5000+bankId}/outraRota', json={"transferCPF": f"{transaction[1]}","receiverCPF": f"{transaction[2]}","destinationBankId": transaction[3],"amount": transaction[4]})
-
-    passingToken = True
-    return jsonify({'message': 'Token processado e passado'}), 200
+    print("\nToken recebido!\n")
+    return jsonify({'message': f'Token recebido no banco {id}'}), 200
 
 # Função que faz o banco verificar se o cliente está cadastrado nele.
 @app.route('/verify', methods=['POST'])
@@ -124,19 +106,58 @@ def verify():
     else:
         return jsonify({'message': 'Cliente não existe!'}), 404
 
+@app.route('/run', methods=['POST'])
+def runTransactions():
+    global token_holder
+    global users
+    global transactionPackage
+    global id
+    global passingToken
+
+    
+    if token_holder:
+        count = 0
+        # Tradução da estrutura transactionPackage para as requisições de fato:
+        for transaction in transactionPackage.values():
+            count += 1
+            # Verificando se o usuário existe neste banco:
+            if transaction[0] not in users.keys():
+                return jsonify({'message': f'O remetente não existe no banco {id}'})
+            
+            # Verificando se o valor da transferencia pode ser transferido:
+            if users[transaction[0]]['balance'] < transaction[4]:
+                return jsonify({'message': f'O usuário de CPF {transaction[0]} possui o saldo insuficiente!'})
+            
+            #Verificando se o destinatário existe:
+            verifyStatusCode = verifyClientExists(transaction[1], transaction[3])
+            
+            if verifyStatusCode == 200:
+                postReturn = requests.post(f'http://localhost:{5000+transaction[3]}/transfer', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","destinationBankId": transaction[3],"amount": transaction[4]})
+                print(f'\n{postReturn.json()}\n')
+
+                if (postReturn.status_code != 200):
+                    print('\nO pacote de transações não pôde ser realizado!\n')
+                    return jsonify({'message': 'O pacote de transações não pôde ser realizado!'})
+                else:
+                    users[transaction[0]]['balance'] -= transaction[4]
+                    return jsonify({'message': f'Transação n° {count} realizada com sucesso'})
+            else:
+                return jsonify({'message': f'O usuário de CPF {transaction[1]} não existe no banco {transaction[3]}'})
+            
+        passingToken = True
+
 def pass_token():
     global token_holder
     global passingToken
     while token_holder:
-        print(f"Passando token para {next_instance}")
+        print(f"\nPassando token para {next_instance}\n")
         try:
-            if passingToken:
-                postReturn = requests.post(f'http://{next_instance}/token', json={})
-                print(postReturn)
-                token_holder = False
-                passingToken = False
+            postReturn = requests.post(f'http://{next_instance}/token', json={})
+            print(f'\n{postReturn.json()}\n')
+            token_holder = False
+            passingToken = False
         except Exception as e:
-            print(f"Erro ao passar o token!")
+            print(f"\nErro ao passar o token!\n")
             time.sleep(5)
 
 # Função que chama a rota '/verify' para checkar se o cliente está no outro banco:
@@ -150,9 +171,14 @@ def verifyClientExists(clientCPF, bankId):
 def wait_token():
     global token_holder
     global passingToken
+    global id
     while True:
-        if token_holder and passingToken:
+        if token_holder:
+            postReturn = requests.post(f'http://localhost:{5000+id}/run', json={})
+            if postReturn:
+                print(f'\n{postReturn.json()}\n')
             pass_token()
+            token_holder = False
 
 # Thread para acionar a API
 def createAPIThread():
@@ -174,3 +200,4 @@ if id == 1:
 createAPIThread()
 
 threading.Thread(target= wait_token).start()
+# threading.Thread(target= runTransactions).start()

@@ -1,0 +1,2 @@
+Iniciar os bancos e colocar as transações para os id certos em transactionPackage.
+Criar os clientes e depositar na conta deles
