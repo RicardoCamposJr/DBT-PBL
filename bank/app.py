@@ -17,7 +17,7 @@ banks = {1: 'localhost:5001',
 # Formato:
 # transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int), operation ('this', 'other')]}
 
-# transactionPackage = {1: ['0001', '0001', 2, 1, 10]}
+# transactionPackage = {1: ['0001', '0001', 2, 1, 10, 'other']}
 
 transactionPackage = {}
 
@@ -177,6 +177,17 @@ def pass_token():
         except Exception as e:
             print(f"\nErro ao passar o token!\n")
             time.sleep(5)
+            # print(f"\nPassando token para {next_instance+1}\n")
+
+            # try:
+            #     postReturn = requests.post(f'http://{next_instance}/token', json={})
+            #     print(f'\n{postReturn.json()}\n')
+            #     token_holder = False
+            #     passingToken = False
+            
+            # except Exception as e:
+            #     print(f"\nErro ao passar o token!\n")
+            #     time.sleep(5)
 
 # Função que chama a rota '/verify' para checkar se o cliente está no outro banco:
 def verifyClientExists(clientCPF, bankId):
@@ -221,4 +232,3 @@ if id == 1:
 createAPIThread()
 
 threading.Thread(target= wait_token).start()
-# threading.Thread(target= runTransactions).start()
