@@ -4,7 +4,7 @@ import threading
 import time
 
 # TO DO: 
-# Implementar a transferencias de outros bancos por esse; Ideia: colocar outra seção no transactionPackage para definir q será em outro banco, entao utilizar a rota de criação para criar em outro banco.
+# Implementar as transações atomicas
 
 app = Flask(__name__)
 
@@ -15,14 +15,22 @@ banks = {1: 'localhost:5001',
          5: 'localhost:5005'}
 
 # Formato:
-# transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int)]}
+# transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int), operation ('this', 'other')]}
 
 # transactionPackage = {1: ['0001', '0001', 2, 1, 10]}
 
 transactionPackage = {}
 
 # Estrutura de dados para armazenar os dados dos usuários
-users = {}
+users = {   "0001": {
+            "balance": 100,
+            "name": "user1"
+            },
+            "0002": {
+            "balance": 100,
+            "name": "user1"
+            }
+        }
 token_holder = False
 bankId = 1
 next_instance = ''
@@ -71,13 +79,14 @@ def createTransactions():
     transferCPF = data.get('transferCPF')
     sourceBankId = int(data.get('sourceBankId'))
     destinationBankId = int(data.get('destinationBankId'))
+    operation = data.get('operation')
     amount = float(data.get('amount'))
 
     if transactionPackage:
         nextKey = max(transactionPackage.keys()) + 1
-        transactionPackage[nextKey] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount]
+        transactionPackage[nextKey] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount, operation]
     else:
-        transactionPackage[1] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount]
+        transactionPackage[1] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount, operation]
 
     
     return jsonify(transactionPackage), 200
@@ -114,6 +123,7 @@ def runTransactions():
     global id
     global passingToken
 
+    transactionsStatus = {}
     
     if token_holder:
         count = 0
@@ -127,24 +137,32 @@ def runTransactions():
             # Verificando se o valor da transferencia pode ser transferido:
             if users[transaction[0]]['balance'] < transaction[4]:
                 return jsonify({'message': f'O usuário de CPF {transaction[0]} possui o saldo insuficiente!'})
-            
+
             #Verificando se o destinatário existe:
             verifyStatusCode = verifyClientExists(transaction[1], transaction[3])
             
             if verifyStatusCode == 200:
-                postReturn = requests.post(f'http://localhost:{5000+transaction[3]}/transfer', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","destinationBankId": transaction[3],"amount": transaction[4]})
-                print(f'\n{postReturn.json()}\n')
+                if transaction[5] == 'this':
+                    postReturn = requests.post(f'http://localhost:{5000+transaction[3]}/transfer', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","destinationBankId": transaction[3],"amount": transaction[4]})
 
-                if (postReturn.status_code != 200):
-                    print('\nO pacote de transações não pôde ser realizado!\n')
-                    return jsonify({'message': 'O pacote de transações não pôde ser realizado!'})
-                else:
-                    users[transaction[0]]['balance'] -= transaction[4]
-                    return jsonify({'message': f'Transação n° {count} realizada com sucesso'})
+                    if (postReturn.status_code != 200):
+                        transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                    
+                    else:
+                        users[transaction[0]]['balance'] -= transaction[4]
+                        transactionsStatus[count] = (f'Transação n° {count} realizada com sucesso')
+                
+                elif transaction[5] == 'other':
+                    postReturn = requests.post(f'http://localhost:{5000+transaction[2]}/transactions', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","sourceBankId": f"{transaction[2]}","destinationBankId": transaction[3],"amount": transaction[4], "operation": "this"})
+
+                    if (postReturn.status_code != 200):
+                        transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                    
             else:
-                return jsonify({'message': f'O usuário de CPF {transaction[1]} não existe no banco {transaction[3]}'})
-            
+                transactionsStatus[count] = (f'O usuário de CPF {transaction[1]} não existe no banco {transaction[3]}')
+        
         passingToken = True
+        return jsonify(transactionsStatus)
 
 def pass_token():
     global token_holder
@@ -171,12 +189,15 @@ def verifyClientExists(clientCPF, bankId):
 def wait_token():
     global token_holder
     global passingToken
+    global transactionPackage
     global id
     while True:
         if token_holder:
-            postReturn = requests.post(f'http://localhost:{5000+id}/run', json={})
-            if postReturn:
-                print(f'\n{postReturn.json()}\n')
+            if transactionPackage:
+                postReturn = requests.post(f'http://localhost:{5000+id}/run', json={})
+                if postReturn:
+                    print(f'\n{postReturn.json()}\n')
+                transactionPackage = {}
             pass_token()
             token_holder = False
 
