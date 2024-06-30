@@ -10,9 +10,9 @@ app = Flask(__name__)
 
 banks = {1: 'localhost:5001',
          2: 'localhost:5002',
-         3: 'localhost:5003',
-         4: 'localhost:5004',
-         5: 'localhost:5005'}
+         3: 'localhost:5003'}
+        #  4: 'localhost:5004',
+        #  5: 'localhost:5005'}
 
 # Formato:
 # transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int), operation ('this', 'other')]}
@@ -167,31 +167,43 @@ def runTransactions():
 def pass_token():
     global token_holder
     global passingToken
-    while token_holder:
-        print(f"\nPassando token para {next_instance}\n")
-        try:
-            postReturn = requests.post(f'http://{next_instance}/token', json={})
-            print(f'\n{postReturn.json()}\n')
-            token_holder = False
-            passingToken = False
-        except Exception as e:
-            print(f"\nErro ao passar o token!\n")
-            time.sleep(5)
-            # print(f"\nPassando token para {next_instance+1}\n")
+    global id
 
-            # try:
-            #     postReturn = requests.post(f'http://{next_instance}/token', json={})
-            #     print(f'\n{postReturn.json()}\n')
-            #     token_holder = False
-            #     passingToken = False
-            
-            # except Exception as e:
-            #     print(f"\nErro ao passar o token!\n")
-            #     time.sleep(5)
+    attempts = 1
+    nextId = 1
+
+    while token_holder:
+        next_instance = f'localhost:{5000+id+nextId}'
+
+        # Caso queira colocar menos bancos, mudar aqui:
+        if id+nextId >= 4:
+            next_instance = 'localhost:5001'
+            nextId = 1
+
+        if next_instance != f'localhost:{5000+id}':
+            print(f"\nTentando passar o token para {next_instance}\n")
+            try:
+                postReturn = requests.post(f'http://{next_instance}/token', json={})
+                print(f'\n{postReturn.json()}\n')
+                token_holder = False
+                passingToken = False
+            except Exception as e:
+                print(f"\nErro ao passar o token para {next_instance}, tentando o próximo.\n")
+                attempts += 1
+                nextId += 1
+                if attempts >= len(banks):
+                    token_holder = False
+                    print(f"Falha ao passar o token para todos os bancos. O banco {id} caiu! Aguardando token...")
+                time.sleep(5)
+        else:
+            print(f"Falha ao passar o token para todos os bancos. O banco {id} caiu! Aguardando token...")
+            token_holder = False
+
 
 # Função que chama a rota '/verify' para checkar se o cliente está no outro banco:
 def verifyClientExists(clientCPF, bankId):
     global id
+
     if bankId != id:
         postReturn = requests.post(f'http://localhost:{5000+bankId}/verify', json={'destinationCPF': clientCPF})
         return postReturn.status_code
@@ -202,6 +214,7 @@ def wait_token():
     global passingToken
     global transactionPackage
     global id
+
     while True:
         if token_holder:
             if transactionPackage:
