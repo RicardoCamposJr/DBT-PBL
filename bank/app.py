@@ -128,8 +128,20 @@ def runTransactions():
     
     if token_holder:
         count = 0
+        stop_event = threading.Event()
+
+        # Iniciar a thread de contagem de 10 segundos
+        timer_thread = threading.Thread(target=contar_10_segundos, args=(stop_event,))
+        timer_thread.start()
+
+        print(transactionPackage.values())
+
         # Tradução da estrutura transactionPackage para as requisições de fato:
         for transaction in transactionPackage.values():
+
+            if stop_event.is_set():
+                return jsonify({'message': 'O tempo de 10 segundos foi excedido. Algumas transações podem não ter sido realizadas.'})
+            
             for operation in transaction:
                 count += 1
                 # Verificando se o usuário existe neste banco:
@@ -162,9 +174,18 @@ def runTransactions():
                         
                 else:
                     transactionsStatus[count] = (f'O usuário de CPF {operation["receiverCPF"]} não existe no banco {operation["destinationBankId"]}')
+
+                # Removendo a transação que foi concluída
+                transactionPackage[operation["userCPF"]].remove(operation)
+
         
         passingToken = True
         return jsonify(transactionsStatus)
+    
+# Função para contar 10 segundos
+def contar_10_segundos(stop_event):
+    time.sleep(10)
+    stop_event.set()
 
 def pass_token():
     global token_holder
@@ -219,11 +240,10 @@ def wait_token():
 
     while True:
         if token_holder:
-            if transactionPackage:
+            if transactionPackage.values():
                 postReturn = requests.post(f'http://localhost:{5000+id}/run', json={})
                 if postReturn:
                     print(f'\n{postReturn.json()}\n')
-                transactionPackage = {}
 
             pass_token()
             token_holder = False
