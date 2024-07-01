@@ -75,6 +75,7 @@ def createTransactions():
     global transactionPackage
     
     data = request.get_json()
+    userCPF = str(data.get('userCPF'))
     receiverCPF = data.get('receiverCPF')
     transferCPF = data.get('transferCPF')
     sourceBankId = int(data.get('sourceBankId'))
@@ -82,14 +83,14 @@ def createTransactions():
     operation = data.get('operation')
     amount = float(data.get('amount'))
 
-    if transactionPackage:
-        nextKey = max(transactionPackage.keys()) + 1
-        transactionPackage[nextKey] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount, operation]
+    if userCPF in transactionPackage.keys():
+        transactionPackage[userCPF].append({"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation})
     else:
-        transactionPackage[1] = [transferCPF, receiverCPF, sourceBankId, destinationBankId, amount, operation]
+        transactionPackage[userCPF] = [{"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation}]
 
-    
-    return jsonify(transactionPackage), 200
+    print(transactionPackage)
+
+    return 'Operação criada!', 200
 
 @app.route('/users', methods=['GET'])
 def get_users():
@@ -129,37 +130,38 @@ def runTransactions():
         count = 0
         # Tradução da estrutura transactionPackage para as requisições de fato:
         for transaction in transactionPackage.values():
-            count += 1
-            # Verificando se o usuário existe neste banco:
-            if transaction[0] not in users.keys():
-                return jsonify({'message': f'O remetente não existe no banco {id}'})
-            
-            # Verificando se o valor da transferencia pode ser transferido:
-            if users[transaction[0]]['balance'] < transaction[4]:
-                return jsonify({'message': f'O usuário de CPF {transaction[0]} possui o saldo insuficiente!'})
-
-            #Verificando se o destinatário existe:
-            verifyStatusCode = verifyClientExists(transaction[1], transaction[3])
-            
-            if verifyStatusCode == 200:
-                if transaction[5] == 'this':
-                    postReturn = requests.post(f'http://localhost:{5000+transaction[3]}/transfer', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","destinationBankId": transaction[3],"amount": transaction[4]})
-
-                    if (postReturn.status_code != 200):
-                        transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
-                    
-                    else:
-                        users[transaction[0]]['balance'] -= transaction[4]
-                        transactionsStatus[count] = (f'Transação n° {count} realizada com sucesso')
+            for operation in transaction:
+                count += 1
+                # Verificando se o usuário existe neste banco:
+                if operation["userCPF"] not in users.keys():
+                    return jsonify({'message': f'O remetente não existe no banco {id}'})
                 
-                elif transaction[5] == 'other':
-                    postReturn = requests.post(f'http://localhost:{5000+transaction[2]}/transactions', json={"transferCPF": f"{transaction[0]}","receiverCPF": f"{transaction[1]}","sourceBankId": f"{transaction[2]}","destinationBankId": transaction[3],"amount": transaction[4], "operation": "this"})
+                # Verificando se o valor da transferencia pode ser transferido:
+                if users[operation["userCPF"]]['balance'] < operation["amount"]:
+                    return jsonify({'message': f'O usuário de CPF {operation["userCPF"]} possui o saldo insuficiente!'})
 
-                    if (postReturn.status_code != 200):
-                        transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                #Verificando se o destinatário existe:
+                verifyStatusCode = verifyClientExists(operation["receiverCPF"], operation["destinationBankId"])
+                
+                if verifyStatusCode == 200:
+                    if operation["operation"] == 'this':
+                        postReturn = requests.post(f'http://localhost:{5000+operation["destinationBankId"]}/transfer', json={"receiverCPF": f"{operation["receiverCPF"]}", "amount": operation["amount"]})
+
+                        if (postReturn.status_code != 200):
+                            transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                        
+                        else:
+                            users[operation["transferCPF"]]['balance'] -= operation["amount"]
+                            transactionsStatus[count] = (f'Transação n° {count} realizada com sucesso')
                     
-            else:
-                transactionsStatus[count] = (f'O usuário de CPF {transaction[1]} não existe no banco {transaction[3]}')
+                    elif operation["operation"] == 'other':
+                        postReturn = requests.post(f'http://localhost:{5000+operation["sourceBankId"]}/transactions', json={"userCPF": operation["userCPF"], "transferCPF": f"{operation["transferCPF"]}", "receiverCPF": f"{operation["receiverCPF"]}", "sourceBankId": f"{operation["sourceBankId"]}", "destinationBankId": operation["destinationBankId"], "amount": operation["amount"], "operation": "this"})
+
+                        if (postReturn.status_code != 200):
+                            transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                        
+                else:
+                    transactionsStatus[count] = (f'O usuário de CPF {operation["receiverCPF"]} não existe no banco {operation["destinationBankId"]}')
         
         passingToken = True
         return jsonify(transactionsStatus)
@@ -222,6 +224,7 @@ def wait_token():
                 if postReturn:
                     print(f'\n{postReturn.json()}\n')
                 transactionPackage = {}
+
             pass_token()
             token_holder = False
 
