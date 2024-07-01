@@ -24,28 +24,37 @@ transactionPackage = {}
 # Estrutura de dados para armazenar os dados dos usuários
 users = {   "0001": {
             "balance": 100,
-            "name": "user1"
+            "name": "user1",
+            "password": "123"
             },
             "0002": {
             "balance": 100,
-            "name": "user1"
+            "name": "user1",
+            "password": "123"
             }
         }
 token_holder = False
 bankId = 1
 next_instance = ''
 passingToken = False
+userCPFLogged = ''
+log = False
 
 @app.route('/user', methods=['POST'])
 def create_user():
     data = request.get_json()
     user_id = data.get('cpf')
+
     if user_id in users:
+        print(f"\nUsuário já existe!!!\n")
         return jsonify({'message': 'Usuário já existe'}), 400
+    
     users[user_id] = {
         'name': data.get('name'),
-        'balance': 0
+        'balance': 0,
+        'password': data.get('password')
     }
+    print(f"\nUsuário criado com sucesso!!!\n")
     return jsonify({'message': 'Usuário criado com sucesso'}), 201
 
 @app.route('/deposit', methods=['POST'])
@@ -56,6 +65,7 @@ def deposit():
     if cpf not in users.keys():
         return jsonify({'message': 'Usuário não encontrado'}), 404
     users[cpf]['balance'] += amount
+    print(f"\nDepósito realizado com sucesso\n")
     return jsonify({'message': 'Depósito realizado com sucesso'}), 200
 
 @app.route('/transfer', methods=['POST'])
@@ -253,6 +263,64 @@ def createAPIThread():
     APIThread = threading.Thread(target=app.run, args=('0.0.0.0', 5000+id), daemon=True)
     APIThread.start()
 
+# Função que será executada na thread para receber valores do usuário
+def receber_valores():
+    time.sleep(2)
+    global userCPFLogged
+    global log
+
+    while True:
+        valor = input(f"\nBem vindo ao sistema de bancos distribuídos, escolha uma das opções abaixo:\n[1] - Cadastrar usuário\n[2] - Entrar\n[3] - Depositar\n[4] - Criar transação\n[5] - Sair\n")
+        if valor == '1':
+            name = input(f"Digite seu nome: ")
+            cpf = input(f"Digite seu CPF: ")
+            senha = input(f"Digite uma senha: ")
+
+            postReturn = requests.post(f'http://localhost:{5000+id}/user', json={"cpf": cpf, "name": name, "password": senha})
+
+            print(postReturn)
+        
+        if valor == '2':
+            cpf = input(f"Digite seu CPF: ")
+            senha = input(f"Digite uma senha: ")
+
+            if cpf in users:
+                print(f"\nBem vindo!!!\n")
+                userCPFLogged = cpf
+                log = True
+            else:
+                print(f"\nCPF ou senha inválidos!\n")
+        
+        if valor == '3':
+            if log:
+                amount = input(f"Digite o valor: ")
+
+                postReturn = requests.post(f'http://localhost:{5000+id}/deposit', json={"cpf": cpf, "amount": amount})
+
+                print(postReturn)
+            else:
+                print(f"\nPor favor faça o loggin!!\n")
+        
+        if valor == '4':
+            if log:
+                receiverCPF = input(f"Digite o CPF do destinatário: ")
+                sourceBankId = input(f"Digite o id do banco remetente: ")
+                destinationBankId = input(f"Digite o id do banco de destino: ")
+                amountTransfer = input(f"Digite o valor da transfêrencia: ")
+                operation = input(f"Digite se a transferencia será deste banco ou de outro: ")
+
+                postReturn = requests.post(f'http://localhost:{5000+id}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
+
+                print(postReturn)
+            
+            else:
+                print(f"\nPor favor faça o loggin!!\n")
+        
+        if valor == '5':
+            log = False
+            userCPFLogged = ''
+            print(f"\nVolte sempre!!\n")
+            
 
 id = int(input('Digite o id desse banco: '))
 
@@ -267,4 +335,10 @@ if id == 1:
 
 createAPIThread()
 
+# Relativo ao token
 threading.Thread(target= wait_token).start()
+
+# Relativo a entrada do usuário:
+thread_receber_valores = threading.Thread(target=receber_valores)
+thread_receber_valores.daemon = True
+thread_receber_valores.start()
