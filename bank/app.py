@@ -257,7 +257,10 @@ def wait_token():
 
 # Thread para acionar a API
 def createAPIThread():
-    APIThread = threading.Thread(target=app.run, args=('0.0.0.0', 5000), daemon=True)
+    global id
+    global banks
+
+    APIThread = threading.Thread(target=app.run, args=(banks[id], 5000), daemon=True)
     APIThread.start()
 
 # Função que será executada na thread para receber valores do usuário
