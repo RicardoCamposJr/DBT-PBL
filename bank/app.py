@@ -213,12 +213,12 @@ def pass_token():
     nextId = 1
 
     while token_holder:
-        next_instance = f'{banks[id+nextId]}:{5000}'
-
         # Caso queira colocar menos bancos, mudar aqui:
         if id+nextId >= 4:
             next_instance = f'{banks[id]}:5001'
             nextId = 1
+        else:
+            next_instance = f'{banks[id+nextId]}:{5000}'
 
         if next_instance != f'{banks[id]}:{5000}':
             print(f"\nTentando passar o token para {next_instance}\n")
