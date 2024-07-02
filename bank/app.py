@@ -215,7 +215,7 @@ def pass_token():
     while token_holder:
         # Caso queira colocar menos bancos, mudar aqui:
         if id+nextId >= 4:
-            next_instance = f'{banks[id]}:5001'
+            next_instance = f'{banks[1]}:5000'
             nextId = 1
         else:
             next_instance = f'{banks[id+nextId]}:{5000}'
