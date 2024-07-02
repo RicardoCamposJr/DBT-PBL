@@ -3,21 +3,11 @@ import requests
 import threading
 import time
 
-# TO DO: 
-# Implementar as transações atomicas
-
 app = Flask(__name__)
 
-banks = {1: 'localhost:5001',
-         2: 'localhost:5002',
+banks = {1: '192.168.100.5',
+         2: '192.168.100.35',
          3: 'localhost:5003'}
-        #  4: 'localhost:5004',
-        #  5: 'localhost:5005'}
-
-# Formato:
-# transactionPackage = {1: [transferCPF (string), receiverCPF (string), sourceBankId (int), destinationBankId (int), amount (int), operation ('this', 'other')]}
-
-# transactionPackage = {1: ['0001', '0001', 2, 1, 10, 'other']}
 
 transactionPackage = {}
 
@@ -54,6 +44,7 @@ def create_user():
         'balance': 0,
         'password': data.get('password')
     }
+
     print(f"\nUsuário criado com sucesso!!!\n")
     return jsonify({'message': 'Usuário criado com sucesso'}), 201
 
@@ -62,9 +53,12 @@ def deposit():
     data = request.get_json()
     cpf = data.get('cpf')
     amount = int(data.get('amount'))
+
     if cpf not in users.keys():
         return jsonify({'message': 'Usuário não encontrado'}), 404
+    
     users[cpf]['balance'] += amount
+
     print(f"\nDepósito realizado com sucesso\n")
     return jsonify({'message': 'Depósito realizado com sucesso'}), 200
 
@@ -153,15 +147,18 @@ def runTransactions():
             
             for operation in transaction:
                 count += 1
+
                 # Verificando se o usuário existe neste banco:
                 if operation["userCPF"] not in users.keys():
                     print(f'O remetente não existe no banco {id}')
+
                     transactionPackage[operation["userCPF"]].remove(operation)
                     return jsonify({'message': f'O remetente não existe no banco {id}'})
                 
                 # Verificando se o valor da transferencia pode ser transferido:
                 if users[operation["userCPF"]]['balance'] < operation["amount"]:
                     print(f'O usuário de CPF {operation["userCPF"]} possui o saldo insuficiente!')
+
                     transactionPackage[operation["userCPF"]].remove(operation)
                     return jsonify({'message': f'O usuário de CPF {operation["userCPF"]} possui o saldo insuficiente!'})
 
@@ -170,7 +167,7 @@ def runTransactions():
                 
                 if verifyStatusCode == 200:
                     if operation["operation"] == 'this':
-                        postReturn = requests.post(f'http://localhost:{5000+operation["destinationBankId"]}/transfer', json={"receiverCPF": f"{operation["receiverCPF"]}", "amount": operation["amount"]})
+                        postReturn = requests.post(f'http://{banks[operation["destinationBankId"]]}:{5000}/transfer', json={"receiverCPF": f"{operation["receiverCPF"]}", "amount": operation["amount"]})
 
                         if (postReturn.status_code != 200):
                             print('O pacote de transações não pôde ser realizado!')
@@ -180,7 +177,7 @@ def runTransactions():
                             print(f'Transação n° {count} realizada com sucesso')
                     
                     elif operation["operation"] == 'other':
-                        postReturn = requests.post(f'http://localhost:{5000+operation["sourceBankId"]}/transactions', json={"userCPF": operation["userCPF"], "transferCPF": f"{operation["transferCPF"]}", "receiverCPF": f"{operation["receiverCPF"]}", "sourceBankId": f"{operation["sourceBankId"]}", "destinationBankId": operation["destinationBankId"], "amount": operation["amount"], "operation": "this"})
+                        postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={"userCPF": operation["userCPF"], "transferCPF": f"{operation["transferCPF"]}", "receiverCPF": f"{operation["receiverCPF"]}", "sourceBankId": f"{operation["sourceBankId"]}", "destinationBankId": operation["destinationBankId"], "amount": operation["amount"], "operation": "this"})
 
                         if (postReturn.status_code != 200):
                             print('O pacote de transações não pôde ser realizado!')
@@ -209,14 +206,14 @@ def pass_token():
     nextId = 1
 
     while token_holder:
-        next_instance = f'localhost:{5000+id+nextId}'
+        next_instance = f'{banks[id+nextId]}:{5000}'
 
         # Caso queira colocar menos bancos, mudar aqui:
         if id+nextId >= 4:
-            next_instance = 'localhost:5001'
+            next_instance = f'{banks[id]}:5001'
             nextId = 1
 
-        if next_instance != f'localhost:{5000+id}':
+        if next_instance != f'{banks[id]}:{5000}':
             print(f"\nTentando passar o token para {next_instance}\n")
             try:
                 requests.post(f'http://{next_instance}/token', json={})
@@ -240,7 +237,7 @@ def verifyClientExists(clientCPF, bankId):
     global id
 
     if bankId != id:
-        postReturn = requests.post(f'http://localhost:{5000+bankId}/verify', json={'destinationCPF': clientCPF})
+        postReturn = requests.post(f'http://{banks[bankId]}:{5000}/verify', json={'destinationCPF': clientCPF})
         return postReturn.status_code
     return 'Não é possível realizar transferências para o mesmo banco!'
 
@@ -253,14 +250,14 @@ def wait_token():
     while True:
         if token_holder:
             if transactionPackage.values():
-                requests.post(f'http://localhost:{5000+id}/run', json={})
+                requests.post(f'http://{banks[id]}:{5000}/run', json={})
 
             pass_token()
             token_holder = False
 
 # Thread para acionar a API
 def createAPIThread():
-    APIThread = threading.Thread(target=app.run, args=('0.0.0.0', 5000+id), daemon=True)
+    APIThread = threading.Thread(target=app.run, args=('0.0.0.0', 5000), daemon=True)
     APIThread.start()
 
 # Função que será executada na thread para receber valores do usuário
@@ -277,7 +274,7 @@ def receber_valores():
             cpf = input(f"Digite seu CPF: ")
             senha = input(f"Digite uma senha: ")
 
-            postReturn = requests.post(f'http://localhost:{5000+id}/user', json={"cpf": cpf, "name": name, "password": senha})
+            postReturn = requests.post(f'http://{banks[id]}:{5000}/user', json={"cpf": cpf, "name": name, "password": senha})
 
             print(postReturn)
         
@@ -296,7 +293,7 @@ def receber_valores():
             if log:
                 amount = input(f"Digite o valor: ")
 
-                postReturn = requests.post(f'http://localhost:{5000+id}/deposit', json={"cpf": cpf, "amount": amount})
+                postReturn = requests.post(f'http://{banks[id]}:{5000}/deposit', json={"cpf": cpf, "amount": amount})
 
                 print(postReturn)
             else:
@@ -312,7 +309,7 @@ def receber_valores():
                     amountTransfer = input(f"Digite o valor da transfêrencia: ")
                     operation = input(f"Digite se a transferencia será deste banco ou de outro: (this/other) ")
 
-                    postReturn = requests.post(f'http://localhost:{5000+id}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
+                    postReturn = requests.post(f'http://{banks[id]}:{5000}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
                     print(postReturn)
 
                     pack = input(f"Deseja incluir mais alguma operação no pacote? (s/n) ")
@@ -321,7 +318,7 @@ def receber_valores():
                 print(f"\nPor favor faça o loggin!!\n")
         
         if valor == '5':
-            postReturn = requests.get(f'http://localhost:{5000+id}/users')
+            postReturn = requests.get(f'http://{banks[id]}:{5000}/users')
             print(f"\n{postReturn.json()}\n")
         
         if valor == '6':
