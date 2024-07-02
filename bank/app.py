@@ -167,7 +167,7 @@ def runTransactions():
                 
                 if verifyStatusCode == 200:
                     if operation["operation"] == 'this':
-                        postReturn = requests.post(f'http://{banks[operation["destinationBankId"]]}:{5000}/transfer', json={"receiverCPF": f"{operation["receiverCPF"]}", "amount": operation["amount"]})
+                        postReturn = requests.post(f'http://{banks[operation["destinationBankId"]]}:{5000}/transfer', json={"receiverCPF": f"{operation['receiverCPF']}", "amount": operation['amount']})
 
                         if (postReturn.status_code != 200):
                             print('O pacote de transações não pôde ser realizado!')
@@ -177,8 +177,15 @@ def runTransactions():
                             print(f'Transação n° {count} realizada com sucesso')
                     
                     elif operation["operation"] == 'other':
-                        postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={"userCPF": operation["userCPF"], "transferCPF": f"{operation["transferCPF"]}", "receiverCPF": f"{operation["receiverCPF"]}", "sourceBankId": f"{operation["sourceBankId"]}", "destinationBankId": operation["destinationBankId"], "amount": operation["amount"], "operation": "this"})
-
+                        postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={
+                            "userCPF": operation["userCPF"],
+                            "transferCPF": f"{operation['transferCPF']}",
+                            "receiverCPF": f"{operation['receiverCPF']}",
+                            "sourceBankId": f"{operation['sourceBankId']}",
+                            "destinationBankId": operation["destinationBankId"],
+                            "amount": operation["amount"],
+                            "operation": "this"
+                        })
                         if (postReturn.status_code != 200):
                             print('O pacote de transações não pôde ser realizado!')
                         
