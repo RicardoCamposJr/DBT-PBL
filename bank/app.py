@@ -144,22 +144,25 @@ def runTransactions():
         timer_thread = threading.Thread(target=contar_10_segundos, args=(stop_event,))
         timer_thread.start()
 
-        print(transactionPackage.values())
-
         # Tradução da estrutura transactionPackage para as requisições de fato:
         for transaction in transactionPackage.values():
 
             if stop_event.is_set():
+                print('O tempo de 10 segundos foi excedido. Algumas transações podem não ter sido realizadas.')
                 return jsonify({'message': 'O tempo de 10 segundos foi excedido. Algumas transações podem não ter sido realizadas.'})
             
             for operation in transaction:
                 count += 1
                 # Verificando se o usuário existe neste banco:
                 if operation["userCPF"] not in users.keys():
+                    print(f'O remetente não existe no banco {id}')
+                    transactionPackage[operation["userCPF"]].remove(operation)
                     return jsonify({'message': f'O remetente não existe no banco {id}'})
                 
                 # Verificando se o valor da transferencia pode ser transferido:
                 if users[operation["userCPF"]]['balance'] < operation["amount"]:
+                    print(f'O usuário de CPF {operation["userCPF"]} possui o saldo insuficiente!')
+                    transactionPackage[operation["userCPF"]].remove(operation)
                     return jsonify({'message': f'O usuário de CPF {operation["userCPF"]} possui o saldo insuficiente!'})
 
                 #Verificando se o destinatário existe:
@@ -170,17 +173,17 @@ def runTransactions():
                         postReturn = requests.post(f'http://localhost:{5000+operation["destinationBankId"]}/transfer', json={"receiverCPF": f"{operation["receiverCPF"]}", "amount": operation["amount"]})
 
                         if (postReturn.status_code != 200):
-                            transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                            print('O pacote de transações não pôde ser realizado!')
                         
                         else:
                             users[operation["transferCPF"]]['balance'] -= operation["amount"]
-                            transactionsStatus[count] = (f'Transação n° {count} realizada com sucesso')
+                            print(f'Transação n° {count} realizada com sucesso')
                     
                     elif operation["operation"] == 'other':
                         postReturn = requests.post(f'http://localhost:{5000+operation["sourceBankId"]}/transactions', json={"userCPF": operation["userCPF"], "transferCPF": f"{operation["transferCPF"]}", "receiverCPF": f"{operation["receiverCPF"]}", "sourceBankId": f"{operation["sourceBankId"]}", "destinationBankId": operation["destinationBankId"], "amount": operation["amount"], "operation": "this"})
 
                         if (postReturn.status_code != 200):
-                            transactionsStatus[count] = ('O pacote de transações não pôde ser realizado!')
+                            print('O pacote de transações não pôde ser realizado!')
                         
                 else:
                     transactionsStatus[count] = (f'O usuário de CPF {operation["receiverCPF"]} não existe no banco {operation["destinationBankId"]}')
@@ -216,8 +219,7 @@ def pass_token():
         if next_instance != f'localhost:{5000+id}':
             print(f"\nTentando passar o token para {next_instance}\n")
             try:
-                postReturn = requests.post(f'http://{next_instance}/token', json={})
-                print(f'\n{postReturn.json()}\n')
+                requests.post(f'http://{next_instance}/token', json={})
                 token_holder = False
                 passingToken = False
             except Exception as e:
@@ -251,9 +253,7 @@ def wait_token():
     while True:
         if token_holder:
             if transactionPackage.values():
-                postReturn = requests.post(f'http://localhost:{5000+id}/run', json={})
-                if postReturn:
-                    print(f'\n{postReturn.json()}\n')
+                requests.post(f'http://localhost:{5000+id}/run', json={})
 
             pass_token()
             token_holder = False
@@ -268,9 +268,10 @@ def receber_valores():
     time.sleep(2)
     global userCPFLogged
     global log
+    global transactionPackage
 
     while True:
-        valor = input(f"\nBem vindo ao sistema de bancos distribuídos, escolha uma das opções abaixo:\n[1] - Cadastrar usuário\n[2] - Entrar\n[3] - Depositar\n[4] - Criar transação\n[5] - Sair\n")
+        valor = input(f"\nBem vindo ao sistema de bancos distribuídos, escolha uma das opções abaixo:\n[1] - Cadastrar usuário\n[2] - Entrar\n[3] - Depositar\n[4] - Criar transação\n[5] - Ver saldo dos clientes\n[6] - Sair\n")
         if valor == '1':
             name = input(f"Digite seu nome: ")
             cpf = input(f"Digite seu CPF: ")
@@ -303,20 +304,27 @@ def receber_valores():
         
         if valor == '4':
             if log:
-                receiverCPF = input(f"Digite o CPF do destinatário: ")
-                sourceBankId = input(f"Digite o id do banco remetente: ")
-                destinationBankId = input(f"Digite o id do banco de destino: ")
-                amountTransfer = input(f"Digite o valor da transfêrencia: ")
-                operation = input(f"Digite se a transferencia será deste banco ou de outro: ")
+                pack = 's'
+                while pack == "s":
+                    receiverCPF = input(f"Digite o CPF do destinatário: ")
+                    sourceBankId = input(f"Digite o id do banco remetente: ")
+                    destinationBankId = input(f"Digite o id do banco de destino: ")
+                    amountTransfer = input(f"Digite o valor da transfêrencia: ")
+                    operation = input(f"Digite se a transferencia será deste banco ou de outro: (this/other) ")
 
-                postReturn = requests.post(f'http://localhost:{5000+id}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
+                    postReturn = requests.post(f'http://localhost:{5000+id}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
+                    print(postReturn)
 
-                print(postReturn)
+                    pack = input(f"Deseja incluir mais alguma operação no pacote? (s/n) ")
             
             else:
                 print(f"\nPor favor faça o loggin!!\n")
         
         if valor == '5':
+            postReturn = requests.get(f'http://localhost:{5000+id}/users')
+            print(f"\n{postReturn.json()}\n")
+        
+        if valor == '6':
             log = False
             userCPFLogged = ''
             print(f"\nVolte sempre!!\n")
