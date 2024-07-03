@@ -5,9 +5,9 @@ import time
 
 app = Flask(__name__)
 
-banks = {1: '192.168.100.5',
-         2: '192.168.100.35',
-         3: 'localhost'}
+banks = {1: '192.168.25.105',
+         2: '192.168.25.106',
+         3: '192.168.25.107'}
 
 transactionPackage = {}
 
@@ -260,7 +260,7 @@ def createAPIThread():
     global id
     global banks
 
-    APIThread = threading.Thread(target=app.run, args=(banks[id], 5000), daemon=True)
+    APIThread = threading.Thread(target=app.run, args=('0.0.0.0', 5000), daemon=True)
     APIThread.start()
 
 # Função que será executada na thread para receber valores do usuário
