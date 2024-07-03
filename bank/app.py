@@ -23,6 +23,7 @@ users = {   "0001": {
             "password": "123"
             }
         }
+
 token_holder = False
 bankId = 1
 next_instance = ''
@@ -108,6 +109,7 @@ def token():
 
     time.sleep(1)
     token_holder = True
+    
     print("\nToken recebido!\n")
     return jsonify({'message': f'Token recebido no banco {id}'}), 200
 
