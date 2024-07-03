@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 banks = {1: '192.168.100.5',
          2: '192.168.100.35',
-         3: 'localhost:5003'}
+         3: 'localhost'}
 
 transactionPackage = {}
 
@@ -106,6 +106,7 @@ def token():
     global token_holder
     global id
 
+    time.sleep(1)
     token_holder = True
     print("\nToken recebido!\n")
     return jsonify({'message': f'Token recebido no banco {id}'}), 200
@@ -164,7 +165,7 @@ def runTransactions():
 
                 #Verificando se o destinatário existe:
                 verifyStatusCode = verifyClientExists(operation["receiverCPF"], operation["destinationBankId"])
-                
+
                 if verifyStatusCode == 200:
                     if operation["operation"] == 'this':
                         postReturn = requests.post(f'http://{banks[operation["destinationBankId"]]}:{5000}/transfer', json={"receiverCPF": f"{operation['receiverCPF']}", "amount": operation['amount']})
@@ -177,15 +178,7 @@ def runTransactions():
                             print(f'Transação n° {count} realizada com sucesso')
                     
                     elif operation["operation"] == 'other':
-                        postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={
-                            "userCPF": operation["userCPF"],
-                            "transferCPF": f"{operation['transferCPF']}",
-                            "receiverCPF": f"{operation['receiverCPF']}",
-                            "sourceBankId": f"{operation['sourceBankId']}",
-                            "destinationBankId": operation["destinationBankId"],
-                            "amount": operation["amount"],
-                            "operation": "this"
-                        })
+                        postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={"userCPF": operation["userCPF"],"transferCPF": f"{operation['transferCPF']}","receiverCPF": f"{operation['receiverCPF']}","sourceBankId": f"{operation['sourceBankId']}","destinationBankId": operation["destinationBankId"],"amount": operation["amount"],"operation": "this"})
                         if (postReturn.status_code != 200):
                             print('O pacote de transações não pôde ser realizado!')
                         
@@ -243,10 +236,8 @@ def pass_token():
 def verifyClientExists(clientCPF, bankId):
     global id
 
-    if bankId != id:
-        postReturn = requests.post(f'http://{banks[bankId]}:{5000}/verify', json={'destinationCPF': clientCPF})
-        return postReturn.status_code
-    return 'Não é possível realizar transferências para o mesmo banco!'
+    postReturn = requests.post(f'http://{banks[bankId]}:{5000}/verify', json={'destinationCPF': clientCPF})
+    return postReturn.status_code
 
 def wait_token():
     global token_holder
