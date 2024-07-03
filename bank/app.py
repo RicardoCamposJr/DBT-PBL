@@ -5,8 +5,8 @@ import time
 
 app = Flask(__name__)
 
-banks = {1: '192.168.25.105',
-         2: '192.168.25.106',
+banks = {1: '192.168.25.131',
+         2: '192.168.25.105',
          3: '192.168.25.107'}
 
 transactionPackage = {}
@@ -332,7 +332,7 @@ def receber_valores():
 
 id = int(input('Digite o id desse banco: '))
 
-if id != 3:
+if id != len(banks):
     next_instance = banks[1+id]
 else:
     next_instance = banks[1]
