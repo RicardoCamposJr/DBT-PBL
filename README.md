@@ -101,6 +101,12 @@ Para manter um elevado grau de confiabilidade no sistema, foram postos algumas l
   - POST: <IP_DA_SUA_MAQUINA>:5000/transactions
     - Cria uma transação para ser executada quando o banco pegar o token.
 
+## 2.1 - Observações adicionais:
+- Para otimizar o tempo de testagem do sistema, já estão cadastrados alguns clientes, para evitar ter que realizar o cadastro toda vez que for testar a aplicação.
+- Para visualizar melhor a criação das transações, é aconselhável inicializar o banco 1 (que inicia o token) somente após iniciar todos os outros bancos. Já que, os prints para a confirmação da transferência do token e demais retornos aparecem no terminal, para a confirmação do que está acontecendo no sistema.
+- Caso o banco 1 seja inicializado antes dos outros bancos, ele vai tentar passar para eles (que não estão no ar), acabando em um sistema sem token. Portanto, é importante iniciar todos os outros antes do banco 1.
+- Para criar transações é necessário estar logado em uma conta de algum cliente no banco. A lógica da senha não foi implementada, pois a parte mais importante em que o problema foca não depende dessa implementação, sendo algo a mais. Portanto, não é preciso acertar a senha para logar em uma conta, facilitando a testagem do sistema.
+- O menu do sistema pode parecer "sujo", visto que, os retornos das requisições HTTP das API Rest estão sendo printados no terminal. Isso foi implementado para o usuário que esteja utilizando ou testando o sistema veja as requisições que estão sendo realizadas. Então, o menu de escolhas irá subir no terminal por conta desses prints, assim como, as perguntas que serão feitas. Por isso, é aconselhável que antes de iniciar o banco 1 (que inicia o token), crie as transações nos demais bancos (que estão com os terminais limpos), pois assim que o banco 1 ser inicializado, o trânsito do token irá poluir a interface amigável no terminal.
 
 
 ## Postman:
