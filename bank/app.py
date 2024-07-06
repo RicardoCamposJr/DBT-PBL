@@ -30,6 +30,7 @@ next_instance = ''
 passingToken = False
 userCPFLogged = ''
 log = False
+fallen = False
 
 @app.route('/user', methods=['POST'])
 def create_user():
@@ -106,9 +107,12 @@ def get_users():
 def token():
     global token_holder
     global id
+    global fallen
 
-    time.sleep(1)
     token_holder = True
+
+    # Caso o banco retorne depois de ter caído.
+    fallen = False
     
     print("\nToken recebido!\n")
     return jsonify({'message': f'Token recebido no banco {id}'}), 200
@@ -122,6 +126,10 @@ def verify():
         return jsonify({'message': 'Cliente existe!'}), 200
     else:
         return jsonify({'message': 'Cliente não existe!'}), 404
+    
+@app.route('/conect', methods=['GET'])
+def conect():
+    return "Conected", 200
 
 @app.route('/run', methods=['POST'])
 def runTransactions():
@@ -135,18 +143,10 @@ def runTransactions():
     
     if token_holder:
         count = 0
-        stop_event = threading.Event()
-
-        # Iniciar a thread de contagem de 10 segundos
-        timer_thread = threading.Thread(target=contar_10_segundos, args=(stop_event,))
-        timer_thread.start()
 
         # Tradução da estrutura transactionPackage para as requisições de fato:
         for transaction in transactionPackage.values():
 
-            if stop_event.is_set():
-                print('O tempo de 10 segundos foi excedido. Algumas transações podem não ter sido realizadas.')
-                return jsonify({'message': 'O tempo de 10 segundos foi excedido. Algumas transações podem não ter sido realizadas.'})
             
             for operation in transaction:
                 count += 1
@@ -194,46 +194,79 @@ def runTransactions():
         passingToken = True
         return jsonify(transactionsStatus)
     
-# Função para contar 10 segundos
-def contar_10_segundos(stop_event):
-    time.sleep(10)
-    stop_event.set()
+def verify_time_without_token():
+    global token_holder
+    global id
+    global banks
+    global fallen
+
+    count = 0
+
+    while True:
+        for s in range(id**2):
+
+            time.sleep(1)
+            count += 1
+
+            if count == id**2:
+
+                # Caso o banco não tenha caído, ele vai passar o token.
+                if not fallen:
+                    token_holder = True
+
+                count = 0
 
 def pass_token():
     global token_holder
     global passingToken
     global id
+    global fallen
 
     attempts = 1
     nextId = 1
 
     while token_holder:
         # Caso queira colocar menos bancos, mudar aqui:
-        if id+nextId >= 4:
+        if id+nextId >= len(banks) + 1:
+
             next_instance = f'{banks[1]}:5000'
             nextId = 1
+
         else:
+
             next_instance = f'{banks[id+nextId]}:{5000}'
 
         if next_instance != f'{banks[id]}:{5000}':
+
             print(f"\nTentando passar o token para {next_instance}\n")
+
             try:
                 requests.post(f'http://{next_instance}/token', json={})
                 token_holder = False
                 passingToken = False
+
             except Exception as e:
+
                 print(f"\nErro ao passar o token para {next_instance}, tentando o próximo.\n")
+                
                 attempts += 1
                 nextId += 1
+
                 if attempts >= len(banks):
                     token_holder = False
+
+                    # Variável que identifica que este banco caiu.
+                    fallen = True
+
                     print(f"Falha ao passar o token para todos os bancos. O banco {id} caiu! Aguardando token...")
-                time.sleep(5)
         else:
-            print(f"Falha ao passar o token para todos os bancos. O banco {id} caiu! Aguardando token...")
             token_holder = False
 
-
+            # Variável que identifica que este banco caiu.
+            fallen = True
+            
+            print(f"Falha ao passar o token para todos os bancos. O banco {id} caiu! Aguardando token...")
+            
 # Função que chama a rota '/verify' para checkar se o cliente está no outro banco:
 def verifyClientExists(clientCPF, bankId):
     global id
@@ -328,7 +361,11 @@ def receber_valores():
             log = False
             userCPFLogged = ''
             print(f"\nVolte sempre!!\n")
+
+# =======================================================
             
+# Configuração inicial:
+
 
 id = int(input('Digite o id desse banco: '))
 
@@ -340,13 +377,24 @@ else:
 if id == 1:
     token_holder = True
     passingToken = True
+    
+# =======================================================
+
+# Threads utilizadas no projeto
+
 
 createAPIThread()
 
-# Relativo ao token
+# Relativo ao token.
 threading.Thread(target= wait_token).start()
+
+# Relativo ao tempo de espera para receber o token.
+threading.Thread(target=verify_time_without_token).start()
+
 
 # Relativo a entrada do usuário:
 thread_receber_valores = threading.Thread(target=receber_valores)
 thread_receber_valores.daemon = True
 thread_receber_valores.start()
+
+# =======================================================
