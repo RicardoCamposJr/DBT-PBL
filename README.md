@@ -68,7 +68,7 @@ OBS.: Outros testes mais robustos foram realizados, não se resumindo apenas no 
 
 - ### Banco:
   
-  - #### 1 - Configurar o endereço do broker:
+  - #### 1 - Configurar os endereços dos bancos:
   
     1.1 - Localize a pasta "/bank".
 
