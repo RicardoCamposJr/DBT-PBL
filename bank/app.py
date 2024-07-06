@@ -2,6 +2,10 @@ from flask import Flask, request, jsonify
 import requests
 import threading
 import time
+import logging
+
+# Desabilita logging de requisições do Werkzeug
+logging.getLogger('werkzeug').disabled = True
 
 app = Flask(__name__)
 
@@ -31,6 +35,9 @@ passingToken = False
 userCPFLogged = ''
 log = False
 fallen = False
+
+# Lock para caso mais de um cliente realize requisições ao mesmo tempo.
+transaction_lock = threading.Lock()
 
 @app.route('/user', methods=['POST'])
 def create_user():
@@ -89,10 +96,11 @@ def createTransactions():
     operation = data.get('operation')
     amount = float(data.get('amount'))
 
-    if userCPF in transactionPackage.keys():
-        transactionPackage[userCPF].append({"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation})
-    else:
-        transactionPackage[userCPF] = [{"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation}]
+    with transaction_lock:
+        if userCPF in transactionPackage.keys():
+            transactionPackage[userCPF].append({"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation})
+        else:
+            transactionPackage[userCPF] = [{"userCPF": userCPF, "transferCPF": transferCPF, "receiverCPF": receiverCPF, "sourceBankId": sourceBankId, "destinationBankId": destinationBankId, "amount": amount, "operation": operation}]
 
     print(transactionPackage)
 
@@ -113,8 +121,7 @@ def token():
 
     # Caso o banco retorne depois de ter caído.
     fallen = False
-    
-    print("\nToken recebido!\n")
+
     return jsonify({'message': f'Token recebido no banco {id}'}), 200
 
 # Função que faz o banco verificar se o cliente está cadastrado nele.
@@ -126,10 +133,6 @@ def verify():
         return jsonify({'message': 'Cliente existe!'}), 200
     else:
         return jsonify({'message': 'Cliente não existe!'}), 404
-    
-@app.route('/conect', methods=['GET'])
-def conect():
-    return "Conected", 200
 
 @app.route('/run', methods=['POST'])
 def runTransactions():
@@ -177,7 +180,7 @@ def runTransactions():
                         
                         else:
                             users[operation["transferCPF"]]['balance'] -= operation["amount"]
-                            print(f'Transação n° {count} realizada com sucesso')
+                            print(f'Transação realizada com sucesso')
                     
                     elif operation["operation"] == 'other':
                         postReturn = requests.post(f'http://{banks[operation["sourceBankId"]]}:{5000}/transactions', json={"userCPF": operation["userCPF"],"transferCPF": f"{operation['transferCPF']}","receiverCPF": f"{operation['receiverCPF']}","sourceBankId": f"{operation['sourceBankId']}","destinationBankId": operation["destinationBankId"],"amount": operation["amount"],"operation": "this"})
@@ -203,12 +206,12 @@ def verify_time_without_token():
     count = 0
 
     while True:
-        for s in range(id**2):
+        for s in range(10+(id**2)):
 
             time.sleep(1)
             count += 1
 
-            if count == id**2:
+            if count == 10+(id**2):
 
                 # Caso o banco não tenha caído, ele vai passar o token.
                 if not fallen:
@@ -238,16 +241,12 @@ def pass_token():
 
         if next_instance != f'{banks[id]}:{5000}':
 
-            print(f"\nTentando passar o token para {next_instance}\n")
-
             try:
                 requests.post(f'http://{next_instance}/token', json={})
                 token_holder = False
                 passingToken = False
 
             except Exception as e:
-
-                print(f"\nErro ao passar o token para {next_instance}, tentando o próximo.\n")
                 
                 attempts += 1
                 nextId += 1
@@ -339,16 +338,16 @@ def receber_valores():
             if log:
                 pack = 's'
                 while pack == "s":
+                    operation = input(f"Digite se a transferencia será deste banco ou de outro: (this/other) ")
                     receiverCPF = input(f"Digite o CPF do destinatário: ")
                     sourceBankId = input(f"Digite o id do banco remetente: ")
                     destinationBankId = input(f"Digite o id do banco de destino: ")
                     amountTransfer = input(f"Digite o valor da transfêrencia: ")
-                    operation = input(f"Digite se a transferencia será deste banco ou de outro: (this/other) ")
-
+                    
+                    pack = input(f"Deseja incluir mais alguma operação? (s/n) ")
                     postReturn = requests.post(f'http://{banks[id]}:{5000}/transactions', json={"userCPF": userCPFLogged, "receiverCPF": receiverCPF,"transferCPF": userCPFLogged,"sourceBankId": sourceBankId,"destinationBankId": destinationBankId,"amount": amountTransfer,"operation": operation})
+                    
                     print(postReturn)
-
-                    pack = input(f"Deseja incluir mais alguma operação no pacote? (s/n) ")
             
             else:
                 print(f"\nPor favor faça o loggin!!\n")
@@ -377,7 +376,7 @@ else:
 if id == 1:
     token_holder = True
     passingToken = True
-    
+
 # =======================================================
 
 # Threads utilizadas no projeto
