@@ -27,12 +27,12 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "http://localhost:5001/users",
+					"raw": "http://localhost:5000/users",
 					"protocol": "http",
 					"host": [
 						"localhost"
 					],
-					"port": "5001",
+					"port": "5000",
 					"path": [
 						"users"
 					]
@@ -71,12 +71,12 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:5001/transfer",
+					"raw": "http://localhost:5000/transfer",
 					"protocol": "http",
 					"host": [
 						"localhost"
 					],
-					"port": "5001",
+					"port": "5000",
 					"path": [
 						"transfer"
 					]
@@ -92,7 +92,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n\t\"cpf\": \"0001\",\r\n    \"name\": \"user1\",\r\n    \"password\": \"123\"\r\n}",
+					"raw": "{\r\n\t\"cpf\": \"0001\",\r\n    \"name\": \"user1\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -100,12 +100,12 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:5001/user",
+					"raw": "http://localhost:5000/user",
 					"protocol": "http",
 					"host": [
 						"localhost"
 					],
-					"port": "5001",
+					"port": "5000",
 					"path": [
 						"user"
 					]
@@ -128,12 +128,12 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:5001/deposit",
+					"raw": "http://localhost:5000/deposit",
 					"protocol": "http",
 					"host": [
 						"localhost"
 					],
-					"port": "5001",
+					"port": "5000",
 					"path": [
 						"deposit"
 					]
@@ -148,7 +148,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"userCPF\": \"0001\",\r\n    \"receiverCPF\": \"0002\",\r\n    \"transferCPF\": \"0001\",\r\n    \"sourceBankId\": 3,\r\n    \"destinationBankId\": 1,\r\n    \"amount\": 10,\r\n    \"operation\": \"other\"\r\n}",
+					"raw": "{\r\n    \"userCPF\": \"0001\",\r\n    \"receiverCPF\": \"0002\",\r\n    \"transferCPF\": \"0001\",\r\n    \"sourceBankId\": 1,\r\n    \"destinationBankId\": 2,\r\n    \"amount\": 10,\r\n    \"operation\": \"other\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -156,12 +156,40 @@
 					}
 				},
 				"url": {
-					"raw": "http://localhost:5001/transactions",
+					"raw": "http://localhost:5000/transactions",
 					"protocol": "http",
 					"host": [
 						"localhost"
 					],
-					"port": "5001",
+					"port": "5000",
+					"path": [
+						"transactions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "transactions Copy",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"userCPF\": \"0001\",\r\n    \"receiverCPF\": \"0002\",\r\n    \"transferCPF\": \"0001\",\r\n    \"sourceBankId\": 1,\r\n    \"destinationBankId\": 2,\r\n    \"amount\": 10,\r\n    \"operation\": \"other\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/transactions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
 					"path": [
 						"transactions"
 					]
