@@ -119,6 +119,8 @@ def token():
 
     token_holder = True
 
+    if fallen:
+        print(f'\nEste banco retornou!!!!\n')
     # Caso o banco retorne depois de ter caído.
     fallen = False
 
@@ -247,11 +249,15 @@ def pass_token():
                 passingToken = False
 
             except Exception as e:
+
+                print(f"Falha ao passar o token para o próximo banco com IP {next_instance}. Tentando o proximo...")
                 
                 attempts += 1
                 nextId += 1
 
                 if attempts >= len(banks):
+
+                    attempts = 0
                     token_holder = False
 
                     # Variável que identifica que este banco caiu.
@@ -301,6 +307,7 @@ def receber_valores():
     global userCPFLogged
     global log
     global transactionPackage
+    global id
 
     while True:
         valor = input(f"\nBem vindo ao sistema de bancos distribuídos, escolha uma das opções abaixo:\n[1] - Cadastrar usuário\n[2] - Entrar\n[3] - Depositar\n[4] - Criar transação\n[5] - Ver saldo dos clientes\n[6] - Sair\n")
@@ -338,10 +345,17 @@ def receber_valores():
             if log:
                 pack = 's'
                 while pack == "s":
+
                     operation = input(f"Digite se a transferencia será deste banco ou de outro: (this/other) ")
-                    receiverCPF = input(f"Digite o CPF do destinatário: ")
-                    sourceBankId = input(f"Digite o id do banco remetente: ")
+                    
+                    if operation == 'other':
+                        sourceBankId = input(f"Digite o id do banco remetente: ")
+                    else :
+                        sourceBankId = id
+
                     destinationBankId = input(f"Digite o id do banco de destino: ")
+                    receiverCPF = input(f"Digite o CPF do destinatário: ")
+                    
                     amountTransfer = input(f"Digite o valor da transfêrencia: ")
                     
                     pack = input(f"Deseja incluir mais alguma operação? (s/n) ")
